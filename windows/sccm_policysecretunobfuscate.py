@@ -5,8 +5,14 @@
 
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, ciphers
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers import Cipher, modes
+
+# This is a hack to support both cryptography 48.0.0 and previous versions
+try:
+    from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
+except ImportError:
+    from cryptography.hazmat.primitives.ciphers.algorithms import TripleDES
 
 def mscrypt_derive_key_sha1(secret:bytes):
     # Implementation of CryptDeriveKey(prov, CALG_3DES, hash, 0, &cryptKey);
@@ -41,7 +47,7 @@ def deobfuscate_policysecret(output:str or bytes):
 
     key = mscrypt_derive_key_sha1(output[4:4+0x28])
     iv = bytes([0] * 8)
-    cipher = Cipher(algorithms.TripleDES(key), modes.CBC(iv), backend=default_backend())
+    cipher = Cipher(TripleDES(key), modes.CBC(iv), backend=default_backend())
     decryptor = cipher.decryptor()
     decrypted_data = decryptor.update(buffer) + decryptor.finalize()
 

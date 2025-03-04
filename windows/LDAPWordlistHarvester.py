@@ -52,7 +52,7 @@ def get_ou_path_from_distinguished_name(distinguishedName):
 
 
 def parseArgs():
-    print("LDAPWordlistHarvester.py v%s - by @podalirius_\n" % VERSION)
+    print("LDAPWordlistHarvester.py v%s - by Remi GASCOU (Podalirius)\n" % VERSION)
 
     parser = argparse.ArgumentParser(description="")
 
