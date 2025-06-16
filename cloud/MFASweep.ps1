@@ -311,13 +311,14 @@ Function Invoke-M365WebPortalAuth{
             $UserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Mobile/15E148 Safari/604.1"
         }
         elseif($UAType -eq "Linux"){
-            $UserAgent = "Mozilla/5.0 (X11; Ubuntu; Linux i686; rv:24.0) Gecko/20100101 Firefox/24.0"
+            $UserAgent = "Mozilla/5.0 (X11; Ubuntu; Linux i686; rv:135.0) Gecko/20100101 Firefox/135.0"
         }
         elseif($UAType -eq "WindowsPhone"){
             $UserAgent = "Mozilla/5.0 (Mobile; Windows Phone 8.1; Android 4.0; ARM; Trident/7.0; Touch; rv:11.0; IEMobile/11.0; NOKIA; Lumia 635) like iPhone OS 7_0_3 Mac OS X AppleWebKit/537 (KHTML, like Gecko) Mobile Safari/537"
         }
         elseif($UAType -eq "MacOS"){
-            $UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1.2 Safari/605.1.15"
+            # Intentionally using not the most recent version of Safari as the server side then expects to use seamless SSO for authentication
+            $UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.5 Safari/605.1.15"
         }
         else{
         Write-Host -ForegroundColor Red "[*] Unknown User Agent Type. Try: Windows, Android, iPhone, Linux, WindowsPhone, or MacOS"
@@ -326,7 +327,7 @@ Function Invoke-M365WebPortalAuth{
     }
     Write-Host "---------------- Microsoft 365 Web Portal w/ ($UAtype) User Agent ----------------"
     Write-Host -ForegroundColor Yellow "[*] Authenticating to Microsoft 365 Web Portal using a ($UAtype) user agent..."
-$SessionRequest = Invoke-WebRequest -Uri 'https://outlook.office365.com' -SessionVariable o365 -UserAgent "$UserAgent"
+$SessionRequest = Invoke-WebRequest -Uri 'https://outlook.office365.com/?authRedirect=true&state=0' -SessionVariable o365 -UserAgent "$UserAgent"
 
 # Extract the 'ctx' value from the response
 $partialctx = [regex]::Matches($SessionRequest.Content, 'urlLogin":".*?"').Value
@@ -572,7 +573,6 @@ zL13fBXF+j9+snvSQ0hCOCcECEXKGpIAAZEOoqBGCL33qoSycZcmhxMQO9KVqqKCoBRBUQFRARERbNeK
 
 
 
-
 Function Invoke-GraphAPIAuth{
     
     Param(
@@ -597,7 +597,10 @@ Function Invoke-GraphAPIAuth{
     [string]$Resource = "https://graph.windows.net",
 
     [Parameter(Position = 5, Mandatory = $False)]
-    [switch]$WriteTokens
+    [switch]$WriteTokens,
+
+    [Parameter(Position = 6, Mandatory = $False)]
+    [switch]$VerboseOut
 
     )
     
@@ -627,6 +630,32 @@ Function Invoke-GraphAPIAuth{
         if ($WriteTokens) {
             Write-TokensToFile -WriteTokens:$WriteTokens -Resource $Resource -ClientId $ClientId -AccessToken $accessToken -RefreshToken $refreshToken
             }
+        if ($verboseout){
+            $parts = $accessToken -split '\.'
+
+            # Decode the payload (second part) from Base64
+            $payload = $parts[1]
+            $padding = switch ($payload.Length % 4) { 
+                2 { '==' }
+                3 { '=' }
+                0 { '' }
+                default { throw "Invalid base64 string length" }
+            }
+            $payload += $padding
+            $decodedPayload = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload))
+
+            # Convert the decoded payload from JSON
+            $jwtData = $decodedPayload | ConvertFrom-Json
+
+            # Extract and print the 'aud', 'appid', and 'scp' fields
+            $aud = $jwtData.aud
+            $appid = $jwtData.appid
+            $scp = $jwtData.scp
+
+            Write-Output "Audience (aud): $aud"
+            Write-Output "App ID (appid): $appid"
+            Write-Output "Scope (scp): $scp"
+        }
         Write-Host "--------------------------------"
         }
     }else{
@@ -847,7 +876,7 @@ Function Invoke-O365ActiveSyncAuth{
     $Headers = @{'Authorization' = "Basic $($EncodeUsernamePassword)"}
     
     try {
-	    $easlogin = Invoke-WebRequest -Uri $EASURL -Headers $Headers -Method Get -ErrorAction Stop
+        $easlogin = Invoke-WebRequest -Uri $EASURL -Headers $Headers -Method Get -ErrorAction Stop
         }catch {
             $resp = $_.Exception.Response.GetResponseStream()
             $reader = New-Object System.IO.StreamReader($resp)
@@ -857,11 +886,11 @@ Function Invoke-O365ActiveSyncAuth{
             $StatusCode = $_.Exception.Response.StatusCode.Value__
         }
         if ($StatusCode -eq 505)
-	    {
-	        Write-Host -ForegroundColor Green "[*] SUCCESS! $username successfully authenticated to O365 ActiveSync."
-            Write-Host -ForegroundColor DarkGreen "[***] NOTE: The Windows 10 Mail app can connect to ActiveSync." 	
+        {
+            Write-Host -ForegroundColor Green "[*] SUCCESS! $username successfully authenticated to O365 ActiveSync."
+            Write-Host -ForegroundColor DarkGreen "[***] NOTE: The Windows 10 Mail app can connect to ActiveSync."  
             $global:asyncresult = "YES"
-	    }
+        }
         else{
             Write-Host -ForegroundColor Red "[*] Login to ActiveSync failed."
         }
@@ -974,11 +1003,14 @@ Function Invoke-ADFSAuth{
 $GuidNames = @{
     "00b41c95-dab0-4487-9791-b9d2c32c80f2" = "Office 365 Management"
     "04b07795-8ddb-461a-bbee-02f9e1bf7b46" = "Microsoft Azure CLI"
+    "0a5f63c0-b750-4f38-a71c-4fc0d58b89e2" = "Intune Management Setup"
     "0ec893e0-5785-4de6-99da-4ed124e5296c" = "Office UWP PWA"
+    "01cb2876-7ebd-4aa4-9cc9-d28bd4d359a9" = "Device Registration"
     "18fbca16-2224-45f6-85b0-f7bf2b39b3f3" = "Microsoft Docs"
     "1950a258-227b-4e31-a9cf-717495945fc2" = "Microsoft Azure PowerShell"
     "1b3c667f-cde3-4090-b60b-3d2abd0117f0" = "Windows Spotlight"
     "1b730954-1685-4b74-9bfd-dac224a7b894" = "Azure Active Directory PowerShell"
+    "1f5530b3-261a-47a9-b357-ded261e17918" = "Multi-Factor Auth Connector"
     "1fec8e78-bce4-4aaf-ab1b-5451cc387264" = "Microsoft Teams"
     "22098786-6e16-43cc-a27d-191a01a1e3b5" = "Microsoft To-Do client"
     "268761a2-03f3-40df-8a8b-c3db24145b6b" = "Universal Store Native Client"
@@ -996,6 +1028,7 @@ $GuidNames = @{
     "872cd9fa-d31f-45e0-9eab-6e460a02d1f1" = "Visual Studio - Legacy"
     "87749df4-7ccf-48f8-aa87-704bad0e0e16" = "Microsoft Teams - Device Admin Agent"
     "90f610bf-206d-4950-b61d-37fa6fd1b224" = "Aadrm Admin PowerShell"
+    "981f26a1-7f43-403b-a875-f8b09b8cd720" = "Multi-Factor Auth Client"
     "9ba1a5c7-f17a-4de9-a1f1-6178c8d51223" = "Microsoft Intune Company Portal"
     "9bc3ab49-b65d-410a-85ad-de819febfddc" = "Microsoft SharePoint Online Management Shell"
     "a0c73c16-a7e3-4564-9a95-2bdf47383716" = "Microsoft Exchange Online Remote PowerShell"
@@ -1004,6 +1037,7 @@ $GuidNames = @{
     "ab9b8c07-8f02-4f72-87fa-80105867a763" = "OneDrive Sync Engine"
     "af124e86-4e96-495a-b70a-90f90ab96707" = "OneDrive iOS App"
     "b26aadf8-566f-4478-926f-589f601d9c74" = "OneDrive"
+    "b642c013-22f8-419d-af11-8f0e05b795e6" = "Intune Management Setup"
     "b90d5b8f-5503-4153-b545-b31cecfaece2" = "AADJ CSP"
     "c0d2a505-13b8-4ae0-aa9e-cddd5eab0b12" = "Microsoft Power BI"
     "c58637bb-e2e1-4312-8a00-04b5ffcd3403" = "SharePoint Online Client Extensibility"
@@ -1032,9 +1066,12 @@ $ApiEndpoints = @{
     "Azure Data Catalog" = "https://datacatalog.azure.com"
     "Azure Key Vault" = "https://vault.azure.net"
     "Cloud Webapp Proxy" = "https://proxy.cloudwebappproxy.net/registerapp"
+    "Client Config" = "https://clients.config.office.net"
+    "Client Config - Government Community Cloud" = "https://clients.config.gcc.office.com"
     "Database" = "https://database.windows.net"
     "Microsoft Graph API" = "https://graph.microsoft.com"
-    "msmamservice" = "https://msmamservice.api.application"
+    "Mobile App Management Service" = "https://msmamservice.api.application"
+    "Intune Mangement" = "https://intunemam.microsoftonline.com"
     "Office Management" = "https://manage.office.com"
     "Office Apps" = "https://officeapps.live.com"
     "OneNote" = "https://onenote.com"
@@ -1045,6 +1082,9 @@ $ApiEndpoints = @{
     "Spaces Api" = "https://api.spaces.skype.com"
     "Webshell Suite" = "https://webshell.suite.office.com"
     "Windows Management API" = "https://management.core.windows.net"
+    "Windows Information Protection - US" = "https://wip.mam.manage.microsoft.us/"
+    "Windows Information Protection" = "https://wip.mam.manage.microsoft.com/"
+    "Windows Information Protection - PPE" = "https://wip.mam.manage-ppe.microsoft.us/"
     "Yammer" = "https://api.yammer.com"
 }
 
@@ -1054,15 +1094,59 @@ Function Invoke-BruteClientIDs {
     Param(
         [string]$Username,
         [string]$Password,
-        [array]$ClientIDs = $MSclientIDs
+        [array]$ClientIDs = $MSclientIDs,
+        [string]$ClientIDFilePath = $null,
+        [string]$ApiEndpointsFilePath = $null,
+        [switch]$VerboseOut
     )
 
-    foreach ($ClientID in $ClientIDs) {
-        $AppName = $GuidNames[$ClientID]
-        Write-Host "[*] Now testing ClientID $ClientID - $AppName"
-        foreach ($Endpoint in $ApiEndpoints.Values) {
-            #Write-Host "Resource = $Endpoint"
-            Invoke-GraphAPIAuth -Username $Username -Password $Password -ClientID $ClientID -BruteClients -Resource $Endpoint -WriteTokens
+     if ($ClientIDFilePath -or $ApiEndpointsFilePath) {
+        $data = Load-ClientIDsAndAPIEndpoints -ClientIDFilePath $ClientIDFilePath -ApiEndpointsFilePath $ApiEndpointsFilePath
+        
+        # Override default ClientIDs and API Endpoints if files are passed
+        if ($ClientIDFilePath) {
+            $ClientIDs = $data.ClientIDs
+        } else {
+            $ClientIDs = $MSClientIDs
+        }
+
+        if ($ApiEndpointsFilePath) {
+            $ApiEndpointsList = $data.ApiEndpoints
+        } else {
+            $ApiEndpointsList = $ApiEndpoints.Values
+        }
+    } else {
+        # If no file paths, use hardcoded values
+        $ClientIDs = $MSclientIDs
+        $ApiEndpointsList = $ApiEndpoints.Values
+    }
+    if ($ClientIDFilePath -or $ApiEndpointsFilePath) {
+        foreach ($ClientID in $ClientIDs) {
+            Write-Host "[*] Now testing ClientID $ClientID"
+            foreach ($Endpoint in $ApiEndpointsList) {
+                #Write-Host "Resource = $Endpoint"
+                if($VerboseOut){
+                    Invoke-GraphAPIAuth -Username $Username -Password $Password -ClientID $ClientID -BruteClients -Resource $Endpoint -WriteTokens -VerboseOut
+                }
+                else{
+                    Invoke-GraphAPIAuth -Username $Username -Password $Password -ClientID $ClientID -BruteClients -Resource $Endpoint -WriteTokens
+                }
+            }
+        }
+    }
+    else{
+        foreach ($ClientID in $ClientIDs) {
+            $AppName = $GuidNames[$ClientID]
+            Write-Host "[*] Now testing ClientID $ClientID - $AppName"
+            foreach ($Endpoint in $ApiEndpointsList) {
+                #Write-Host "Resource = $Endpoint"
+                if($VerboseOut){
+                    Invoke-GraphAPIAuth -Username $Username -Password $Password -ClientID $ClientID -BruteClients -Resource $Endpoint -WriteTokens -VerboseOut
+                }
+                else{
+                    Invoke-GraphAPIAuth -Username $Username -Password $Password -ClientID $ClientID -BruteClients -Resource $Endpoint -WriteTokens
+                }
+            }
         }
     }
 }
@@ -1148,3 +1232,29 @@ Function Write-CookiesToFile {
 
     Write-Host -ForegroundColor Cyan "[*] Cookies and User Agent appended to $tokenFilePath"
 }
+
+Function Load-ClientIDsAndAPIEndpoints {
+    Param(
+        [string]$ClientIDFilePath,
+        [string]$ApiEndpointsFilePath
+    )
+    
+    # Load Client IDs from file
+    if (Test-Path $ClientIDFilePath) {
+        $ClientIDs = Get-Content -Path $ClientIDFilePath
+    } else {
+        Write-Host "Client ID file not found at path: $ClientIDFilePath" -ForegroundColor Red
+        return
+    }
+    
+    # Load API Endpoints from file
+    if (Test-Path $ApiEndpointsFilePath) {
+        $ApiEndpoints = Get-Content -Path $ApiEndpointsFilePath
+    } else {
+        Write-Host "API Endpoints file not found at path: $ApiEndpointsFilePath" -ForegroundColor Red
+        return
+    }
+    
+    return @{ClientIDs = $ClientIDs; ApiEndpoints = $ApiEndpoints}
+}
+
