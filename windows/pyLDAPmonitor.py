@@ -11,13 +11,14 @@ import sys
 import ssl
 import random
 import ldap3
-from sectools.windows.ldap import raw_ldap_query, init_ldap_session
+from sectools.windows.ldap.ldap import raw_ldap_query, init_ldap_session
 from sectools.windows.crypto import nt_hash, parse_lm_nt_hashes
 from ldap3.protocol.formatters.formatters import format_sid
 import time
 import datetime
 import re
 from binascii import unhexlify
+from itertools import chain
 
 
 ### Data utils
@@ -129,6 +130,7 @@ class LDAPConsole(object):
         # Add all attributes
         self.all_ldap_attributes.append(ldap3.ALL_ATTRIBUTES)
         # Remove duplicates
+        self.all_ldap_attributes = list(chain.from_iterable(self.all_ldap_attributes))
         self.all_ldap_attributes = sorted(list(set(self.all_ldap_attributes)))
         return self.all_ldap_attributes
 

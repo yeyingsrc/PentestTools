@@ -22,7 +22,7 @@ function Get-AzureToken
         $scope = 'https://graph.microsoft.com/.default'
         If($kv){$scope="https://vault.azure.net/.default"}
         $d = "grant_type=password&username=$Username&password=$Password&client_id=d3590ed6-52b3-4102-aeff-aad2292ab01c&scope=$scope&expiresIn=3599"
-        $c = 'https://login.microsoftonline.com/' + $tenantid + '/oauth2/v2.0/token'
+        $c = "https://login.microsoftonline.com/{0}/oauth2/v2.0/token" -f $tenantid
         $a = Invoke-RestMethod -Uri $c -Method 'POST' -Headers $headers -Body $d
         $OfficeGraphToken = $a.access_token
         If($OfficeGraphToken){
@@ -32,60 +32,59 @@ function Get-AzureToken
     If($AAD){$token = Get-AzAccessToken -ResourceTypeName AadGraph}
     If($REST){$token = Get-AzAccessToken}
     If($Graph){$token = Get-AzAccessToken -ResourceUrl "https://graph.microsoft.com/"}
-    $Headers.Add("Authorization","Bearer"+ " " + "$($token.token)")    
+    $Headers.Add("Authorization","Bearer $($token.token)")    
     $Headers
 }
 
 function Get-AzureCurrentUser
 {
     $APSUser = Get-AzContext
-    $Headers = Get-AzureToken -Graph
     if($APSUser)
      {         						  
         $Headers = Get-AzureToken -Graph 		  
 		$obj = New-Object -TypeName psobject 
 		$username = $APSUser.Account
         If($APSUser.Subscription){
-        $activesub = $APSUser.Subscription.Name + ' (' + $APSUser.Subscription.Id + ')'
+        $activesub = "{0} ({1})" -f $APSUser.Subscription.Name, $APSUser.Subscription.Id
         }
         $Subscriptions = get-azsubscription *>&1
-        $subcoll =@()
+        $subcoll = New-Object System.Collections.ArrayList
         If ($Subscriptions){
             ForEach ($Subscription in $Subscriptions){
-            $sub = $Subscription.Name + ' (' + $Subscription.Id + ')'
-            $subcoll += $sub
+            $sub = "{0} ({1})" -f $Subscription.Name, $Subscription.Id
+            [void]$subcoll.Add($sub)
             }
         }
 		$user = Invoke-RestMethod -Headers $Headers -Uri 'https://graph.microsoft.com/beta/me'
 		$userid=$user.id
         $MembershipsReq = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$userid/memberOf" 
         $Memberships = $MembershipsReq.value
-        $Groups = @()
-        $AADRoles = @()
+        $Groups = New-Object System.Collections.ArrayList
+        $AADRoles = New-Object System.Collections.ArrayList
         ForEach ($Membership in $Memberships){
             If($Membership."@odata.type" -eq '#microsoft.graph.group'){
             $GroupName = $Membership.DisplayName
-            $Groups += $GroupName                  
+            [void]$Groups.Add($GroupName)                  
             }else{
-            $AADRoles += $Membership.DisplayName
+            [void]$AADRoles.Add($Membership.DisplayName)
             }
         } 
-        $coll = @()           
+        $coll = New-Object System.Collections.ArrayList           
 		try{$rbacroles = Get-AzRoleAssignment -ObjectId $userid *>&1}catch{}
         If($rbacroles){                                     
             ForEach ($rbacrole in $rbacroles){
-            $RBACRoleCollection = $rbacrole.RoleDefinitionName + ' (' +  $rbacrole.scope + ')'
-            $coll += $RBACRoleCollection
+            $RBACRoleCollection = "{0} ({1})" -f $rbacrole.RoleDefinitionName, $rbacrole.scope
+            [void]$coll.Add($RBACRoleCollection)
             }
         }
         $obj | Add-Member -MemberType NoteProperty -Name TenantID -Value $APSUser.Tenant.id
 		$obj | Add-Member -MemberType NoteProperty -Name Username -Value $user.userPrincipalName
 		$obj | Add-Member -MemberType NoteProperty -Name ObjectId -Value $userId
-        $obj | Add-Member -MemberType NoteProperty -Name AADRoles -Value $AADRoles
-        $obj | Add-Member -MemberType NoteProperty -Name AADGroups -Value $Groups
-		$obj | Add-Member -MemberType NoteProperty -Name AzureRoles -Value $coll
+        $obj | Add-Member -MemberType NoteProperty -Name AADRoles -Value $AADRoles.ToArray()
+        $obj | Add-Member -MemberType NoteProperty -Name AADGroups -Value $Groups.ToArray()
+		$obj | Add-Member -MemberType NoteProperty -Name AzureRoles -Value $coll.ToArray()
         $obj | Add-Member -MemberType NoteProperty -Name 'Active Subscription' -Value $activesub
-        $obj | Add-Member -MemberType NoteProperty -Name 'Available Subscriptions' -Value $subcoll
+        $obj | Add-Member -MemberType NoteProperty -Name 'Available Subscriptions' -Value $subcoll.ToArray()
 		$obj
         }
     else{
@@ -221,7 +220,7 @@ Write-Host @'
 8888888P"  d88""88b 888  888  888 d8P  Y8b 888P"  .'____    ,'     d88P     888  888 888P"   d8P  Y8b   
 888        888  888 888  888  888 88888888 888         /  ,'      d88P      888  888 888     88888888 
 888        Y88..88P Y88b 888 d88P Y8b.     888        / ,'       d88P       Y88b 888 888     Y8b.   
-888         "Y88P"   "Y8888888P"   "Y8888  888       /,'        d8888888888  "Y88888 888      "Y8888  version 2.2
+888         "Y88P"   "Y8888888P"   "Y8888  888       /,'        d8888888888  "Y88888 888      "Y8888  version 2.3
                                                     /'                                                													
 '@ -ForegroundColor Cyan
 
@@ -335,14 +334,14 @@ function Get-AzureUser
                 $userdata = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$userid" 
                 $MembershipsReq = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$userid/memberOf" 
                 $Memberships = $MembershipsReq.value
-                $Groups = @()
-                $EntraRoles = @()
+                $Groups = New-Object System.Collections.ArrayList
+                $EntraRoles = New-Object System.Collections.ArrayList
                 ForEach ($Membership in $Memberships){
                     If($Membership."@odata.type" -eq '#microsoft.graph.group'){
                     $GroupName = $Membership.DisplayName
-                    $Groups += $GroupName                  
+                    [void]$Groups.Add($GroupName)                  
                     }else{
-                    $EntraRoles += $Membership.DisplayName
+                    [void]$EntraRoles.Add($Membership.DisplayName)
                     }
                 } 
 	            $obj | Add-Member -MemberType NoteProperty -Name Username -Value $userdata.UserPrincipalName
@@ -350,8 +349,8 @@ function Get-AzureUser
                 $obj | Add-Member -MemberType NoteProperty -Name Title -Value $userdata.jobTitle
                 If($userdata.onPremisesDistinguishedName){
                 $obj | Add-Member -MemberType NoteProperty -Name OnPremDN -Value $userdata.onPremisesDistinguishedName}
-                $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles
-                $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups
+                $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles.ToArray()
+                $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups.ToArray()
                 $obj	
 		}
 	}	
@@ -366,14 +365,14 @@ function Get-AzureUser
         $userdata = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$userid" 
         $MembershipsReq = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$userid/memberOf" 
         $Memberships = $MembershipsReq.value
-        $Groups = @()
-        $EntraRoles = @()
+        $Groups = New-Object System.Collections.ArrayList
+        $EntraRoles = New-Object System.Collections.ArrayList
         ForEach ($Membership in $Memberships){
             If($Membership."@odata.type" -eq '#microsoft.graph.group'){
             $GroupName = $Membership.DisplayName
-            $Groups += $GroupName                  
+            [void]$Groups.Add($GroupName)                  
             }else{
-            $EntraRoles += $Membership.DisplayName
+            [void]$EntraRoles.Add($Membership.DisplayName)
             }
         } 
 	    $obj | Add-Member -MemberType NoteProperty -Name Username -Value $userdata.UserPrincipalName
@@ -381,8 +380,8 @@ function Get-AzureUser
         $obj | Add-Member -MemberType NoteProperty -Name Title -Value $userdata.jobTitle
         If($userdata.onPremisesDistinguishedName){
         $obj | Add-Member -MemberType NoteProperty -Name OnPremDN -Value $userdata.onPremisesDistinguishedName}
-        $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles
-        $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups
+        $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles.ToArray()
+        $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups.ToArray()
         $obj		  
         }
     }
@@ -391,14 +390,14 @@ function Get-AzureUser
 	    $userdata = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$id" 
         $MembershipsReq = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$id/memberOf" 
         $Memberships = $MembershipsReq.value
-        $Groups = @()
-        $EntraRoles = @()
+        $Groups = New-Object System.Collections.ArrayList
+        $EntraRoles = New-Object System.Collections.ArrayList
         ForEach ($Membership in $Memberships){
             If($Membership."@odata.type" -eq '#microsoft.graph.group'){
             $GroupName = $Membership.DisplayName
-            $Groups += $GroupName                  
+            [void]$Groups.Add($GroupName)                  
             }else{
-            $EntraRoles += $Membership.DisplayName
+            [void]$EntraRoles.Add($Membership.DisplayName)
             }
         } 
 	    $obj | Add-Member -MemberType NoteProperty -Name Username -Value $userdata.UserPrincipalName
@@ -406,8 +405,8 @@ function Get-AzureUser
         $obj | Add-Member -MemberType NoteProperty -Name Title -Value $userdata.jobTitle
         If($userdata.onPremisesDistinguishedName){
         $obj | Add-Member -MemberType NoteProperty -Name OnPremDN -Value $userdata.onPremisesDistinguishedName}
-        $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles
-        $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups
+        $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles.ToArray()
+        $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups.ToArray()
         $obj	  
     }  
     else{
@@ -425,14 +424,14 @@ function Get-AzureUser
 	    $userdata = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$id" 
         $MembershipsReq = Invoke-RestMethod -headers $Headers -uri "https://graph.microsoft.com/beta/users/$id/memberOf" 
         $Memberships = $MembershipsReq.value
-        $Groups = @()
-        $EntraRoles = @()
+        $Groups = New-Object System.Collections.ArrayList
+        $EntraRoles = New-Object System.Collections.ArrayList
         ForEach ($Membership in $Memberships){
             If($Membership."@odata.type" -eq '#microsoft.graph.group'){
             $GroupName = $Membership.DisplayName
-            $Groups += $GroupName                  
+            [void]$Groups.Add($GroupName)                  
             }else{
-            $EntraRoles += $Membership.DisplayName
+            [void]$EntraRoles.Add($Membership.DisplayName)
             }
         } 
 	    $obj | Add-Member -MemberType NoteProperty -Name Username -Value $userdata.UserPrincipalName
@@ -440,8 +439,8 @@ function Get-AzureUser
         $obj | Add-Member -MemberType NoteProperty -Name Title -Value $userdata.jobTitle
         If($userdata.onPremisesDistinguishedName){
         $obj | Add-Member -MemberType NoteProperty -Name OnPremDN -Value $userdata.onPremisesDistinguishedName}
-        $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles
-        $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups
+        $obj | Add-Member -MemberType NoteProperty -Name EntraRoles -Value $EntraRoles.ToArray()
+        $obj | Add-Member -MemberType NoteProperty -Name EntraGroups -Value $Groups.ToArray()
         $obj	  
     }          
 } 
@@ -591,12 +590,12 @@ function Get-AzureTarget
                 $appid = $app.id
                 $OwnedApps = Invoke-RestMethod -Headers $Headers -Uri "https://graph.microsoft.com/beta/applications/$appid/owners"
                 $OwnedByUser=$OwnedApps.value | Where-Object {$_.userPrincipalName -eq $upn}
-                $coll=@()
+                $coll = New-Object System.Collections.ArrayList
 		        If($OwnedByUser)
 		        {       
                   $appobj | Add-Member -MemberType NoteProperty -Name 'OwnedAppName' -Value $app.DisplayName
                   $appobj | Add-Member -MemberType NoteProperty -Name 'OwnedAppID' -Value $appid  
-                  $coll += $appobj               
+                  [void]$coll.Add($appobj)               
 		        } $coll | ft        
 	        } 
         }
@@ -610,12 +609,12 @@ function Get-AzureTarget
             $appid = $app.id
             $OwnedApps = Invoke-RestMethod -Headers $Headers -Uri "https://graph.microsoft.com/beta/applications/$appid/owners"
             $OwnedByUser=$OwnedApps.value | Where-Object {$_.userPrincipalName -eq $upn}
-            $coll=@()
+            $coll = New-Object System.Collections.ArrayList
 		    If($OwnedByUser)
 		    {       
               $appobj | Add-Member -MemberType NoteProperty -Name 'OwnedAppName' -Value $app.DisplayName
               $appobj | Add-Member -MemberType NoteProperty -Name 'OwnedAppID' -Value $appid  
-              $coll += $appobj               
+              [void]$coll.Add($appobj)               
 		    } $coll | ft      
 	    } 
     }
@@ -624,7 +623,7 @@ function Get-AzureTarget
     ForEach($Sub in $Subs){
         Set-AzContext $Sub.Id | Out-Null
         $ResourceCollection = Get-AzResource     
-        $Result=@()
+        $Result = New-Object System.Collections.ArrayList
         ForEach($Resource in $ResourceCollection){
             $ResourceID = $Resource.ResourceId            
             $Assignments = Get-AzRoleAssignment -Scope $ResourceID | Where-Object {$_.ObjectId -eq "$id" -or $gids -match $_.ObjectId}
@@ -639,7 +638,7 @@ function Get-AzureTarget
                     GroupName = $Assignment.DisplayName
                     Scope = $ResourceId                          
                 }
-            $Result+=$AccessibleResources
+            [void]$Result.Add($AccessibleResources)
             }           
         }
         If($List){$Result}
@@ -2042,7 +2041,7 @@ function Invoke-AzureVMUserDataCommand
 	$Resource = Get-AzResource -Name $VM
 	$ResourceID = $Resource.ResourceId
 	$Headers = @{}
-    $Headers.Add("Authorization","Bearer"+ " " + "$($token.token)") 
+    $Headers.Add("Authorization","Bearer $($token.token)") 
 	$FullCommand = $Command + '%' + $token.token + '%' + $ResourceID
 	$Bytes = [System.Text.Encoding]::Unicode.GetBytes($FullCommand)
 	$EncodedText =[Convert]::ToBase64String($Bytes)
